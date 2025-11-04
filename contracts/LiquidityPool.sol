@@ -50,6 +50,9 @@ contract LiquidityPool is ReentrancyGuard, Ownable {
     
     // Mapping of LP token balances
     mapping(address => uint256) public balanceOf;
+    
+    // Mapping of approved operators for removing liquidity (user => operator => approved)
+    mapping(address => mapping(address => bool)) public approvedOperators;
 
     /**
      * @dev Constructor
@@ -186,6 +189,65 @@ contract LiquidityPool is ReentrancyGuard, Ownable {
         token.safeTransfer(msg.sender, tokenAmount);
 
         emit LiquidityRemoved(msg.sender, ethAmount, tokenAmount, liquidityTokens);
+    }
+
+    /**
+     * @dev Approve an operator to remove liquidity on your behalf
+     * @param operator Address to approve
+     * @param approved Whether to approve or revoke
+     */
+    function approveOperator(address operator, bool approved) external {
+        approvedOperators[msg.sender][operator] = approved;
+    }
+
+    /**
+     * @dev Removes liquidity from the pool on behalf of a user (for Router)
+     * @param from Address of the user whose liquidity is being removed
+     * @param liquidityTokens Amount of LP tokens to burn
+     * @param to Address to send ETH and tokens to
+     * @return ethAmount Amount of ETH returned
+     * @return tokenAmount Amount of tokens returned
+     */
+    function removeLiquidityFor(
+        address from,
+        uint256 liquidityTokens,
+        address to
+    )
+        external
+        nonReentrant
+        returns (uint256 ethAmount, uint256 tokenAmount)
+    {
+        require(liquidityTokens > 0, "LiquidityPool: liquidity amount must be greater than 0");
+        require(from != address(0), "LiquidityPool: invalid from address");
+        require(to != address(0), "LiquidityPool: invalid to address");
+        require(
+            msg.sender == from || approvedOperators[from][msg.sender],
+            "LiquidityPool: not authorized to remove liquidity"
+        );
+        require(balanceOf[from] >= liquidityTokens, "LiquidityPool: insufficient liquidity tokens");
+
+        uint256 _totalSupply = totalSupply;
+        require(_totalSupply > 0, "LiquidityPool: no liquidity to remove");
+
+        // Calculate amounts to return
+        ethAmount = (liquidityTokens * reserveETH) / _totalSupply;
+        tokenAmount = (liquidityTokens * reserveToken) / _totalSupply;
+
+        require(ethAmount > 0 && tokenAmount > 0, "LiquidityPool: insufficient liquidity burned");
+
+        // Burn LP tokens from the user
+        balanceOf[from] -= liquidityTokens;
+        totalSupply -= liquidityTokens;
+
+        // Update reserves
+        reserveETH -= ethAmount;
+        reserveToken -= tokenAmount;
+
+        // Transfer ETH and tokens to the specified address
+        payable(to).transfer(ethAmount);
+        token.safeTransfer(to, tokenAmount);
+
+        emit LiquidityRemoved(from, ethAmount, tokenAmount, liquidityTokens);
     }
 
     /**
