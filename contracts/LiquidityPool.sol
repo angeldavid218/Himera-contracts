@@ -6,6 +6,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 
 /**
  * @title LiquidityPool
@@ -14,6 +15,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
  */
 contract LiquidityPool is ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
+    using Address for address payable;
 
     // Events
     event LiquidityAdded(
@@ -185,7 +187,7 @@ contract LiquidityPool is ReentrancyGuard, Ownable {
         reserveToken -= tokenAmount;
 
         // Transfer ETH and tokens to user
-        payable(msg.sender).transfer(ethAmount);
+        payable(msg.sender).sendValue(ethAmount);
         token.safeTransfer(msg.sender, tokenAmount);
 
         emit LiquidityRemoved(msg.sender, ethAmount, tokenAmount, liquidityTokens);
@@ -244,7 +246,7 @@ contract LiquidityPool is ReentrancyGuard, Ownable {
         reserveToken -= tokenAmount;
 
         // Transfer ETH and tokens to the specified address
-        payable(to).transfer(ethAmount);
+        payable(to).sendValue(ethAmount);
         token.safeTransfer(to, tokenAmount);
 
         emit LiquidityRemoved(from, ethAmount, tokenAmount, liquidityTokens);
@@ -331,7 +333,7 @@ contract LiquidityPool is ReentrancyGuard, Ownable {
         reserveToken = _reserveToken + tokenAmountIn;
 
         // Transfer ETH to user
-        payable(msg.sender).transfer(ethOut);
+        payable(msg.sender).sendValue(ethOut);
 
         emit Swap(msg.sender, 0, tokenAmountIn, ethOut, 0);
     }
